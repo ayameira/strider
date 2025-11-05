@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import bodyParser from 'body-parser';
-import OpenAI from 'openai';
+import { getOpenAIClient } from './lib/openaiClient.js';
 
 dotenv.config();
 
@@ -10,168 +10,67 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Initialize OpenAI
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+const openai = getOpenAIClient();
 
 // Middleware
 app.use(cors());
 app.use(bodyParser.json());
 
-// Health check endpoint
+// --- In-memory Data Store ---
+// For simplicity, we'll keep data in memory.
+// In a real app, you'd use a database.
+class DataStore {
+  constructor() {
+    this.users = new Map();
+  }
+
+  getUserData(userId) {
+    if (!this.users.has(userId)) {
+      this.users.set(userId, {
+        userId,
+        workouts: [],
+        trainingPlan: null,
+        goal: 'Run a marathon', // Default goal
+      });
+    }
+    return this.users.get(userId);
+  }
+
+  updateUserData(userId, data) {
+    const userData = this.getUserData(userId);
+    Object.assign(userData, data);
+    return userData;
+  }
+}
+
+const dataStore = new DataStore();
+
+// --- API Endpoints ---
+
+// Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', message: 'StrideMind API is running' });
 });
 
-// Generate initial training plan
-app.post('/api/plan/generate', async (req, res) => {
+// Get all data for a user
+app.get('/api/user/:userId', (req, res) => {
   try {
-    const { currentFitness, weeklyMileage, raceDate, goals, experience } = req.body;
-
-    const prompt = `You are an expert marathon coach. Create a personalized marathon training plan based on:
-- Current fitness level: ${currentFitness}
-- Current weekly mileage: ${weeklyMileage} miles
-- Target race date: ${raceDate}
-- Goals: ${goals}
-- Running experience: ${experience}
-
-Generate a structured 12-16 week training plan with:
-1. Weekly mileage progression
-2. Key workout types (easy runs, long runs, tempo, intervals)
-3. Rest days
-4. Taper period
-
-Format the response as JSON with this structure:
-{
-  "planSummary": "Brief overview of the plan philosophy",
-  "weeks": [
-    {
-      "weekNumber": 1,
-      "totalMiles": 25,
-      "workouts": [
-        {"day": "Monday", "type": "rest", "distance": 0, "notes": ""},
-        {"day": "Tuesday", "type": "easy", "distance": 4, "notes": "Easy pace"},
-        ...
-      ]
-    }
-  ],
-  "keyPrinciples": ["principle1", "principle2"]
-}`;
-
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4',
-      messages: [
-        { role: 'system', content: 'You are an expert marathon coach who creates personalized, safe, and effective training plans.' },
-        { role: 'user', content: prompt }
-      ],
-      temperature: 0.7,
-      response_format: { type: 'json_object' }
-    });
-
-    const plan = JSON.parse(completion.choices[0].message.content);
-    res.json({ success: true, plan });
+    const { userId } = req.params;
+    const userData = dataStore.getUserData(userId);
+    res.json({ success: true, data: userData });
   } catch (error) {
-    console.error('Error generating plan:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// Analyze workout and provide feedback
-app.post('/api/workout/analyze', async (req, res) => {
+// Sync user data
+app.post('/api/user/:userId/sync', (req, res) => {
   try {
-    const { workout, plannedWorkout, recentWorkouts, currentWeek } = req.body;
-
-    const prompt = `You are an expert marathon coach analyzing a completed workout.
-
-Planned workout: ${plannedWorkout.type} - ${plannedWorkout.distance} miles
-Actual workout:
-- Distance: ${workout.distance} miles
-- Duration: ${workout.duration} minutes
-- Effort level: ${workout.effort}/10
-- Notes: ${workout.notes || 'None'}
-
-Recent training context:
-${recentWorkouts.map(w => `- ${w.date}: ${w.distance} miles, effort ${w.effort}/10`).join('\n')}
-
-Current week: ${currentWeek}
-
-Provide:
-1. Brief, motivating feedback (2-3 sentences)
-2. Assessment of whether the workout met the goal
-3. Any concerns or red flags (fatigue, injury risk)
-4. Recommendation: "continue", "adjust_easier", or "adjust_harder"
-
-Format as JSON:
-{
-  "feedback": "Your feedback here",
-  "assessment": "met_goal" | "exceeded" | "fell_short",
-  "concerns": ["concern1"] or [],
-  "recommendation": "continue" | "adjust_easier" | "adjust_harder",
-  "reasoning": "Brief explanation"
-}`;
-
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4',
-      messages: [
-        { role: 'system', content: 'You are a supportive marathon coach who provides clear, actionable feedback.' },
-        { role: 'user', content: prompt }
-      ],
-      temperature: 0.7,
-      response_format: { type: 'json_object' }
-    });
-
-    const analysis = JSON.parse(completion.choices[0].message.content);
-    res.json({ success: true, analysis });
+    const { userId } = req.params;
+    const data = req.body;
+    const updatedData = dataStore.updateUserData(userId, data);
+    res.json({ success: true, data: updatedData });
   } catch (error) {
-    console.error('Error analyzing workout:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// Adjust training plan based on feedback
-app.post('/api/plan/adjust', async (req, res) => {
-  try {
-    const { currentPlan, recentWorkouts, adjustment, weekNumber } = req.body;
-
-    const prompt = `You are an expert marathon coach adjusting a training plan.
-
-Current plan for upcoming week (week ${weekNumber}):
-${JSON.stringify(currentPlan.weeks.find(w => w.weekNumber === weekNumber), null, 2)}
-
-Recent workout history:
-${recentWorkouts.map(w => `- ${w.date}: ${w.distance} miles, effort ${w.effort}/10, completed: ${w.completed}`).join('\n')}
-
-Adjustment needed: ${adjustment}
-
-Create an adjusted plan for the next week that:
-1. Respects the athlete's current state
-2. Maintains progression toward marathon goals
-3. Prevents injury and overtraining
-
-Return JSON:
-{
-  "adjustedWeek": {
-    "weekNumber": ${weekNumber},
-    "totalMiles": number,
-    "workouts": [...],
-    "adjustmentNote": "Explanation of changes"
-  }
-}`;
-
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4',
-      messages: [
-        { role: 'system', content: 'You are an expert marathon coach who adapts training plans intelligently.' },
-        { role: 'user', content: prompt }
-      ],
-      temperature: 0.7,
-      response_format: { type: 'json_object' }
-    });
-
-    const adjusted = JSON.parse(completion.choices[0].message.content);
-    res.json({ success: true, adjustedWeek: adjusted.adjustedWeek });
-  } catch (error) {
-    console.error('Error adjusting plan:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -179,22 +78,31 @@ Return JSON:
 // Chat with AI coach
 app.post('/api/coach/chat', async (req, res) => {
   try {
-    const { message, context } = req.body;
+    const { userId, message } = req.body;
 
-    const systemPrompt = `You are a supportive marathon coach. The athlete's context:
-- Current week: ${context.currentWeek || 'Not started'}
-- Recent workouts: ${context.recentWorkouts?.length || 0}
-- Training goal: Marathon
+    if (!userId || !message) {
+      return res.status(400).json({ success: false, error: 'userId and message are required' });
+    }
 
-Provide helpful, encouraging, and expert advice. Keep responses concise and actionable.`;
+    const userData = dataStore.getUserData(userId);
+
+    const systemPrompt = `You are StrideMind, a supportive and expert running coach. Your goal is to help the user achieve their running goals.
+
+User's Context:
+- Goal: ${userData.goal}
+- Training Plan: ${userData.trainingPlan ? JSON.stringify(userData.trainingPlan, null, 2) : 'No training plan set.'}
+- Recent Workouts:
+${userData.workouts.length > 0 ? userData.workouts.slice(0, 10).map(w => `  - ${w.date}: ${w.type}, ${w.distance} miles, effort ${w.effort}/10`).join('\n') : '  No recent workouts logged.'}
+
+Based on this context, provide a helpful, encouraging, and expert response to the user's message. Keep your answers conversational and not too long.`;
 
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4',
+      model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: message }
       ],
-      temperature: 0.8,
+      temperature: 0.7,
       max_tokens: 300
     });
 
@@ -205,6 +113,7 @@ Provide helpful, encouraging, and expert advice. Keep responses concise and acti
     res.status(500).json({ success: false, error: error.message });
   }
 });
+
 
 app.listen(PORT, () => {
   console.log(`🏃 StrideMind API running on port ${PORT}`);

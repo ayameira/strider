@@ -4,6 +4,7 @@
 # Usage: ./test-api.sh
 
 BASE_URL="http://localhost:3000"
+USER_ID="test-user-from-script"
 
 echo "🏃 Testing StrideMind API..."
 echo ""
@@ -13,55 +14,48 @@ echo "1️⃣ Testing health endpoint..."
 curl -s "$BASE_URL/health" | jq '.'
 echo ""
 
-# Test 2: Generate training plan
-echo "2️⃣ Testing plan generation..."
-curl -s -X POST "$BASE_URL/api/plan/generate" \
+# Test 2: Initialize coach session
+echo "2️⃣ Initializing coach session for user: $USER_ID..."
+session_response=$(curl -s -X POST "$BASE_URL/api/user/$USER_ID/coach/init" \
   -H "Content-Type: application/json" \
   -d '{
-    "currentFitness": "Running 3 times per week, comfortable with 5K",
-    "weeklyMileage": 20,
-    "raceDate": "2024-10-15",
-    "goals": "Complete first marathon under 4 hours",
-    "experience": "Completed several half marathons, new to marathon distance"
-  }' | jq '.success'
+    "goal": "Run a 5k in under 25 minutes",
+    "raceDate": "2026-05-15"
+  }')
+echo "$session_response" | jq '.success'
+session_id=$(echo "$session_response" | jq -r '.sessionId')
+echo "Session ID: $session_id"
+echo "Session resumed: $(echo "$session_response" | jq -r '.resumed')"
 echo ""
 
-# Test 3: Analyze workout
-echo "3️⃣ Testing workout analysis..."
-curl -s -X POST "$BASE_URL/api/workout/analyze" \
+# Test 3: Sync workouts
+echo "3️⃣ Syncing workouts..."
+sync_response=$(curl -s -X POST "$BASE_URL/api/user/$USER_ID/workouts/sync" \
   -H "Content-Type: application/json" \
   -d '{
-    "workout": {
-      "distance": 5,
-      "duration": 2400,
-      "effort": 7,
-      "notes": "Felt good, slight fatigue at end"
-    },
-    "plannedWorkout": {
-      "type": "easy",
-      "distance": 5,
-      "notes": "Easy pace"
-    },
-    "recentWorkouts": [
-      {"date": "2024-01-10", "distance": 4, "effort": 6},
-      {"date": "2024-01-08", "distance": 6, "effort": 7}
-    ],
-    "currentWeek": 3
-  }' | jq '.success'
+    "workouts": [
+      {"id": "'$(uuidgen)'", "date": "2025-10-20T10:00:00Z", "type": "easy", "activityType": "running", "distance": 5, "duration": 2700, "effort": 5, "completed": true},
+      {"id": "'$(uuidgen)'", "date": "2025-10-18T09:30:00Z", "type": "long", "activityType": "running", "distance": 12, "duration": 6300, "effort": 7, "completed": true}
+    ]
+  }')
+echo $sync_response | jq '.'
 echo ""
 
 # Test 4: Chat with coach
-echo "4️⃣ Testing coach chat..."
-curl -s -X POST "$BASE_URL/api/coach/chat" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "message": "How am I progressing?",
-    "context": {
-      "currentWeek": 3,
-      "recentWorkouts": 5
-    }
-  }' | jq '.success'
-echo ""
+if [ -n "$session_id" ] && [ "$session_id" != "null" ]; then
+  echo "4️⃣ Messaging coach for user $USER_ID..."
+  chat_response=$(curl -s -X POST "$BASE_URL/api/user/$USER_ID/coach/chat" \
+    -H "Content-Type: application/json" \
+    -d '{
+      "message": "Coach, what should I focus on this week?"
+    }')
+  echo "$chat_response" | jq '.success'
+  echo "Response preview:" $(echo "$chat_response" | jq -r '.response' | cut -c1-120)
+  echo ""
+else
+  echo "⚠️  Skipping chat test because session initialization failed."
+  echo ""
+fi
 
 echo "✅ API tests complete!"
 echo ""
