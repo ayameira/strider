@@ -1,12 +1,12 @@
 #!/bin/bash
 
-# StrideMind API Test Script
+# strider API Test Script
 # Usage: ./test-api.sh
 
 BASE_URL="http://localhost:3000"
 USER_ID="test-user-from-script"
 
-echo "🏃 Testing StrideMind API..."
+echo "🏃 Testing strider API..."
 echo ""
 
 # Test 1: Health check

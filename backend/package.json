@@ -1,7 +1,7 @@
 {
-  "name": "stridemind-backend",
+  "name": "strider-backend",
   "version": "1.0.0",
-  "description": "Backend API for StrideMind marathon training app",
+  "description": "Backend API for strider marathon training app",
   "main": "server.js",
   "type": "module",
   "scripts": {

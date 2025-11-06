@@ -29,8 +29,9 @@ class DataStore {
       this.users.set(userId, {
         userId,
         workouts: [],
-        trainingPlan: null,
+        planDocument: null,
         goal: 'Run a marathon', // Default goal
+        profile: null,
       });
     }
     return this.users.get(userId);
@@ -49,7 +50,7 @@ const dataStore = new DataStore();
 
 // Health check
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', message: 'StrideMind API is running' });
+  res.json({ status: 'ok', message: 'strider API is running' });
 });
 
 // Get all data for a user
@@ -86,24 +87,40 @@ app.post('/api/coach/chat', async (req, res) => {
 
     const userData = dataStore.getUserData(userId);
 
-    const systemPrompt = `You are StrideMind, a supportive and expert running coach. Your goal is to help the user achieve their running goals.
+    const profileLine = userData.profile
+      ? `- Name: ${userData.profile.name}\n- Preferred Units: ${userData.profile.distanceUnit}`
+      : '- Profile: Not provided yet.';
+
+    const planLine = userData.planDocument
+      ? `- Weekly Plan (markdown):\n${userData.planDocument.content}`
+      : '- Weekly Plan: Not set. Offer to help craft or refresh it if relevant.';
+
+    const workoutsSection = userData.workouts.length > 0
+      ? userData.workouts
+          .slice(0, 10)
+          .map(w => `  - ${w.date}: ${w.type}, ${w.distance} miles, effort ${w.effort}/10`)
+          .join('\n')
+      : '  No recent workouts logged.';
+
+    const systemPrompt = `You are strider, a supportive and expert running coach. Your goal is to help the user achieve their running goals.
 
 User's Context:
+${profileLine}
 - Goal: ${userData.goal}
-- Training Plan: ${userData.trainingPlan ? JSON.stringify(userData.trainingPlan, null, 2) : 'No training plan set.'}
+${planLine}
 - Recent Workouts:
-${userData.workouts.length > 0 ? userData.workouts.slice(0, 10).map(w => `  - ${w.date}: ${w.type}, ${w.distance} miles, effort ${w.effort}/10`).join('\n') : '  No recent workouts logged.'}
+${workoutsSection}
 
-Based on this context, provide a helpful, encouraging, and expert response to the user's message. Keep your answers conversational and not too long.`;
+When you update or propose edits to the weekly plan, output the revised markdown so it can be stored. Be warm, concise, and clear.`;
 
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: 'gpt-5',
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: message }
       ],
-      temperature: 0.7,
-      max_tokens: 300
+      temperature: 1,
+      //max_tokens: 1000
     });
 
     const response = completion.choices[0].message.content;
@@ -116,5 +133,5 @@ Based on this context, provide a helpful, encouraging, and expert response to th
 
 
 app.listen(PORT, () => {
-  console.log(`🏃 StrideMind API running on port ${PORT}`);
+  console.log(`🏃 strider API running on port ${PORT}`);
 });
