@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import bodyParser from 'body-parser';
+import { randomUUID } from 'crypto';
 import { getOpenAIClient } from './lib/openaiClient.js';
 
 dotenv.config();
@@ -32,6 +33,7 @@ class DataStore {
         planDocument: null,
         goal: 'Run a marathon', // Default goal
         profile: null,
+        chatHistory: [],
       });
     }
     return this.users.get(userId);
@@ -40,7 +42,30 @@ class DataStore {
   updateUserData(userId, data) {
     const userData = this.getUserData(userId);
     Object.assign(userData, data);
+    if (!Array.isArray(userData.chatHistory)) {
+      userData.chatHistory = [];
+    }
     return userData;
+  }
+
+  getChatHistory(userId) {
+    const userData = this.getUserData(userId);
+    if (!Array.isArray(userData.chatHistory)) {
+      userData.chatHistory = [];
+    }
+    return userData.chatHistory;
+  }
+
+  appendChatTurn(userId, turn) {
+    const userData = this.getUserData(userId);
+    if (!Array.isArray(userData.chatHistory)) {
+      userData.chatHistory = [];
+    }
+    userData.chatHistory.push(turn);
+    const maxTurns = 40;
+    if (userData.chatHistory.length > maxTurns) {
+      userData.chatHistory = userData.chatHistory.slice(-maxTurns);
+    }
   }
 }
 
@@ -113,10 +138,15 @@ ${workoutsSection}
 
 When you update or propose edits to the weekly plan, output the revised markdown so it can be stored. Be warm, concise, and clear.`;
 
+    const previousTurns = dataStore.getChatHistory(userId);
     const completion = await openai.chat.completions.create({
-      model: 'gpt-5',
+      model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: systemPrompt },
+        ...previousTurns.map(turn => ({
+          role: turn.role,
+          content: turn.content,
+        })),
         { role: 'user', content: message }
       ],
       temperature: 1,
@@ -124,7 +154,31 @@ When you update or propose edits to the weekly plan, output the revised markdown
     });
 
     const response = completion.choices[0].message.content;
-    res.json({ success: true, response });
+    const timestamp = new Date().toISOString();
+
+    const userTurn = {
+      id: randomUUID(),
+      role: 'user',
+      content: message,
+      timestamp,
+    };
+
+    const assistantTurn = {
+      id: randomUUID(),
+      role: 'assistant',
+      content: response,
+      timestamp: new Date().toISOString(),
+    };
+
+    dataStore.appendChatTurn(userId, userTurn);
+    dataStore.appendChatTurn(userId, assistantTurn);
+
+    res.json({
+      success: true,
+      response,
+      assistantTurn,
+      //history: dataStore.getChatHistory(userId),
+    });
   } catch (error) {
     console.error('Error in chat:', error);
     res.status(500).json({ success: false, error: error.message });
