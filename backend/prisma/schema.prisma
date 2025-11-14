@@ -1,0 +1,80 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String        @id
+  goal         String        @default("Run a marathon")
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  profile      UserProfile?
+  planDocument PlanDocument?
+  workouts     Workout[]
+  chatTurns    ChatTurn[]
+}
+
+model UserProfile {
+  id           String   @id @default(uuid())
+  userId       String   @unique
+  name         String
+  distanceUnit String
+  lastUpdated  DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model PlanDocument {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  title       String
+  content     String
+  lastUpdated DateTime
+  context     Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Workout {
+  id           String   @id
+  userId       String
+  date         DateTime
+  type         String
+  activityType String
+  distance     Float
+  duration     Float
+  effort       Int
+  notes        String   @default("")
+  completed    Boolean
+  feedback     String?
+  tempoSets    Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, date])
+}
+
+model ChatTurn {
+  id        String   @id
+  userId    String
+  role      String
+  content   String
+  timestamp DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, timestamp])
+}
