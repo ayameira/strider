@@ -114,6 +114,25 @@ function mapUserProfileRecord(record) {
   return {
     name: record.name,
     distanceUnit: record.distanceUnit,
+    dateOfBirth: toISOString(record.dateOfBirth),
+    medicalConditions: record.medicalConditions ?? null,
+    currentInjuries: record.currentInjuries ?? null,
+    
+    goalType: record.goalType ?? null,
+    raceDistance: record.raceDistance ?? null,
+    raceDate: toISOString(record.raceDate),
+    goalDetail: record.goalDetail ?? null,
+    
+    trainingsPerWeek: record.trainingsPerWeek ?? null,
+    trainingDays: record.trainingDays ?? [],
+    longRunDay: record.longRunDay ?? null,
+    
+    otherActivities: record.otherActivities ?? [],
+    otherActivityDuration: record.otherActivityDuration ?? null,
+    otherActivityIntensity: record.otherActivityIntensity ?? null,
+    physicallyDemandingJob: record.physicallyDemandingJob ?? null,
+    jobDetail: record.jobDetail ?? null,
+    
     createdAt: toISOString(record.createdAt),
     lastUpdated: toISOString(record.lastUpdated) ?? toISOString(record.createdAt),
   };
@@ -245,6 +264,26 @@ export async function syncUserData(userId, payload) {
       const profileData = {
         name: typeof profile.name === 'string' ? profile.name : 'Athlete',
         distanceUnit: typeof profile.distanceUnit === 'string' ? profile.distanceUnit : 'miles',
+        
+        dateOfBirth: toDate(profile.dateOfBirth),
+        medicalConditions: typeof profile.medicalConditions === 'string' ? profile.medicalConditions : null,
+        currentInjuries: typeof profile.currentInjuries === 'string' ? profile.currentInjuries : null,
+        
+        goalType: typeof profile.goalType === 'string' ? profile.goalType : null,
+        raceDistance: typeof profile.raceDistance === 'string' ? profile.raceDistance : null,
+        raceDate: toDate(profile.raceDate),
+        goalDetail: typeof profile.goalDetail === 'string' ? profile.goalDetail : null,
+        
+        trainingsPerWeek: typeof profile.trainingsPerWeek === 'number' ? profile.trainingsPerWeek : null,
+        trainingDays: Array.isArray(profile.trainingDays) ? profile.trainingDays : [],
+        longRunDay: typeof profile.longRunDay === 'string' ? profile.longRunDay : null,
+        
+        otherActivities: Array.isArray(profile.otherActivities) ? profile.otherActivities : [],
+        otherActivityDuration: typeof profile.otherActivityDuration === 'number' ? profile.otherActivityDuration : null,
+        otherActivityIntensity: typeof profile.otherActivityIntensity === 'string' ? profile.otherActivityIntensity : null,
+        physicallyDemandingJob: typeof profile.physicallyDemandingJob === 'boolean' ? profile.physicallyDemandingJob : null,
+        jobDetail: typeof profile.jobDetail === 'string' ? profile.jobDetail : null,
+        
         createdAt: toDate(profile.createdAt) ?? new Date(),
         lastUpdated: toDate(profile.lastUpdated) ?? new Date(),
       };
@@ -258,6 +297,25 @@ export async function syncUserData(userId, payload) {
         update: {
           name: profileData.name,
           distanceUnit: profileData.distanceUnit,
+          dateOfBirth: profileData.dateOfBirth,
+          medicalConditions: profileData.medicalConditions,
+          currentInjuries: profileData.currentInjuries,
+          
+          goalType: profileData.goalType,
+          raceDistance: profileData.raceDistance,
+          raceDate: profileData.raceDate,
+          goalDetail: profileData.goalDetail,
+          
+          trainingsPerWeek: profileData.trainingsPerWeek,
+          trainingDays: profileData.trainingDays,
+          longRunDay: profileData.longRunDay,
+          
+          otherActivities: profileData.otherActivities,
+          otherActivityDuration: profileData.otherActivityDuration,
+          otherActivityIntensity: profileData.otherActivityIntensity,
+          physicallyDemandingJob: profileData.physicallyDemandingJob,
+          jobDetail: profileData.jobDetail,
+          
           lastUpdated: profileData.lastUpdated,
         },
       });
