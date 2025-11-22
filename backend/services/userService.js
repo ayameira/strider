@@ -147,6 +147,7 @@ function mapPlanDocumentRecord(record) {
     id: record.id,
     title: record.title,
     content: record.content,
+    weeks: record.weeks ?? null,
     lastUpdated: toISOString(record.lastUpdated),
     context: record.context ?? null,
   };
@@ -167,6 +168,7 @@ function sanitizePlanDocument(plan) {
     id: typeof plan.id === 'string' ? plan.id : null,
     title,
     content,
+    weeks: plan.weeks ?? null,
     lastUpdated: toDate(plan.lastUpdated) ?? new Date(),
     context: plan.context ?? null,
   };
@@ -331,12 +333,14 @@ export async function syncUserData(userId, payload) {
           userId,
           title: planDocument.title,
           content: planDocument.content,
+          weeks: planDocument.weeks,
           lastUpdated: planDocument.lastUpdated,
           context: planDocument.context,
         },
         update: {
           title: planDocument.title,
           content: planDocument.content,
+          weeks: planDocument.weeks,
           lastUpdated: planDocument.lastUpdated,
           context: planDocument.context,
         },

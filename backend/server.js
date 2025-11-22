@@ -368,7 +368,24 @@ ${planLine}
 - Recent Workouts:
 ${workoutsSection}
 
-When you update or propose edits to the weekly plan, output the revised markdown so it can be stored. Be warm, concise, and clear.`;
+You can create multi-week training plans.
+When you update or propose edits to the plan, you MUST output the plan as a JSON object within a code block labeled 'json'.
+The structure should be:
+{
+  "weeks": [
+    {
+      "weekNumber": 1,
+      "focus": "Base Building",
+      "days": [
+        { "dayOfWeek": 1, "restDay": true }, // Sunday
+        { "dayOfWeek": 2, "workout": { "title": "Easy Run", "type": "Easy Run", "distance": 3.0, "duration": null, "description": "Easy pace" }, "restDay": false }
+        // ...
+      ]
+    }
+  ]
+}
+Valid workout types: "Easy Run", "Long Run", "Tempo", "Intervals", "Recovery", "Rest", "Cross Training".
+Be warm, concise, and clear in your text response, but keep the JSON strict.`;
 
     const previousTurns = await getChatHistory(userId);
     const completion = await openai.chat.completions.create({
@@ -386,6 +403,28 @@ When you update or propose edits to the weekly plan, output the revised markdown
     });
 
     const response = completion.choices[0].message.content;
+
+    // Try to extract JSON plan
+    const jsonMatch = response.match(/```json\n([\s\S]*?)\n```/) || response.match(/```\n([\s\S]*?)\n```/);
+    if (jsonMatch) {
+      try {
+        const potentialPlan = JSON.parse(jsonMatch[1]);
+        if (potentialPlan.weeks && Array.isArray(potentialPlan.weeks)) {
+          const newPlanDocument = {
+            id: userData.planDocument?.id,
+            title: userData.planDocument?.title || "Training Plan",
+            content: "See structured view",
+            weeks: potentialPlan.weeks,
+            lastUpdated: new Date(),
+            context: userData.planDocument?.context
+          };
+          await syncUserData(userId, { ...userData, planDocument: newPlanDocument });
+        }
+      } catch (e) {
+        console.log("Failed to parse JSON plan from LLM", e);
+      }
+    }
+
     const timestamp = new Date().toISOString();
 
     const userTurn = {

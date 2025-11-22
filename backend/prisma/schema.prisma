@@ -60,6 +60,7 @@ model PlanDocument {
   userId      String   @unique
   title       String
   content     String
+  weeks       Json?
   lastUpdated DateTime
   context     Json?
   createdAt   DateTime @default(now())
